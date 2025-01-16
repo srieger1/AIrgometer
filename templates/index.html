@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Answer Display</title>
+</head>
+<body>
+    <h1>Ask a Question</h1>
+    <form id="ask-form">
+        <input type="text" id="question" placeholder="Enter your question" required>
+        <button type="submit">Ask</button>
+    </form>
+
+    <h2>Answer</h2>
+    <div id="answer-display"></div>
+
+    <h2>Submit Watt Seconds</h2>
+    <form id="watt-form">
+        <input type="number" id="watt-seconds" placeholder="Enter Watt seconds" required>
+        <button type="submit">Submit</button>
+    </form>
+
+    <script>
+        const askForm = document.getElementById("ask-form");
+        const wattForm = document.getElementById("watt-form");
+        const answerDisplay = document.getElementById("answer-display");
+
+        askForm.addEventListener("submit", async (e) => {
+            e.preventDefault();
+            const question = document.getElementById("question").value;
+
+            const response = await fetch("/ask", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ question })
+            });
+
+            const data = await response.json();
+            if (data.estimated_watt_seconds) {
+                alert(`Estimated Watt Seconds: ${data.estimated_watt_seconds}`);
+            }
+        });
+
+        wattForm.addEventListener("submit", async (e) => {
+            e.preventDefault();
+            const wattSeconds = document.getElementById("watt-seconds").value;
+
+            const response = await fetch("/submit_watt_seconds", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ watt_seconds: parseFloat(wattSeconds) })
+            });
+
+            const data = await response.json();
+            if (data.displayed_answer) {
+                answerDisplay.innerText = data.displayed_answer;
+            }
+        });
+    </script>
+</body>
+</html>
