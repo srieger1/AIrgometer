@@ -2,12 +2,12 @@ from flask import Flask, request, jsonify, render_template
 import time
 import threading
 
-from transformers import AutoModelForCausalLM, AutoTokenizer
+#from transformers import AutoModelForCausalLM, AutoTokenizer
 # reduce memory usage and improve performance, using CUDA
 #from transformers import AutoModelForCausalLM, AutoTokenizer
-import torch
+#import torch
 
-from codecarbon import EmissionsTracker
+#from codecarbon import EmissionsTracker
 
 import requests
 
@@ -74,7 +74,8 @@ def query_ai_model(question):
 
     # Payload for the API request
     payload = {
-        "model": "llama2",  # Replace with the model you pulled
+        #"model": "llama2",  # Replace with the model you pulled
+        "model": "llama3.2",  # Replace with the model you pulled
         "prompt": question,
         "stream": False  # Set to True if you want streaming responses
     }
@@ -96,22 +97,26 @@ def query_ai_model(question):
 current_answer = ""
 displayed_answer = ""
 estimated_watt_minutes = 0
+submitted_watt_seconds = 0
 last_request_time = time.time()
+timeout_occured = False
 
 def reset_state():
-    global current_answer, displayed_answer, estimated_watt_minutes, last_request_time
+    global current_answer, displayed_answer, estimated_watt_minutes, last_request_time, submitted_watt_seconds
     current_answer = ""
     displayed_answer = ""
     estimated_watt_minutes = 0
+    submitted_watt_seconds = 0
     last_request_time = time.time()
 
 @app.route("/")
 def index():
+    reset_state()
     return render_template("index.html")
 
 @app.route("/ask", methods=["POST"])
 def ask_question():
-    global current_answer, displayed_answer, estimated_watt_minutes, last_request_time
+    global current_answer, estimated_watt_minutes
     reset_state()
 
     question = request.json.get("question")
@@ -133,18 +138,26 @@ def ask_question():
 
 @app.route("/submit_watt_seconds", methods=["POST"])
 def submit_watt_seconds():
-    global displayed_answer, last_request_time
+    global displayed_answer, last_request_time, submitted_watt_seconds, timeout_occured
 
     watt_seconds = request.json.get("watt_seconds")
-    if not watt_seconds:
+    if not watt_seconds and watt_seconds != 0:
         return jsonify({"error": "Watt seconds are required"}), 400
+
+    if watt_seconds == 0:
+        if timeout_occured:
+            timeout_occured = False
+            return jsonify({"info": "Timeout"}), 200
+        return jsonify({"info": "0 watt seconds submitted. Assumed timeout check"}), 100
 
     # Update last request time
     last_request_time = time.time()
 
     # Calculate fraction of the answer to display
     total_watt_seconds = estimated_watt_minutes * 60
-    fraction = min(watt_seconds / total_watt_seconds, 1.0)
+    submitted_watt_seconds = submitted_watt_seconds + watt_seconds
+    print("Submitted Watt Seconds:", submitted_watt_seconds)
+    fraction = min(submitted_watt_seconds / total_watt_seconds, 1.0)
     displayed_answer = current_answer[:int(fraction * len(current_answer))]
 
     return jsonify({
@@ -153,10 +166,12 @@ def submit_watt_seconds():
     })
 
 def check_timeout():
+    global timeout_occured
     while True:
         time.sleep(10)  # Check every 10 seconds
-        if current_answer and (time.time() - last_request_time > 60):
+        if current_answer and (time.time() - last_request_time > 20):
             print("Timeout reached. Resetting UI.")
+            timeout_occured = True
             reset_state()
 
 # Start timeout thread

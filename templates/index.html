@@ -25,6 +25,29 @@
         const askForm = document.getElementById("ask-form");
         const wattForm = document.getElementById("watt-form");
         const answerDisplay = document.getElementById("answer-display");
+        const questionInput = document.getElementById("question");
+        const wattInput = document.getElementById("watt-seconds");
+
+        function clearUI() {
+            questionInput.value = '';
+            wattInput.value = '';
+            answerDisplay.innerText = '';
+        }
+
+        // Check for timeout every 5 seconds
+        setInterval(async () => {
+            const response = await fetch("/submit_watt_seconds", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ watt_seconds: 0 })
+            });
+            
+            const data = await response.json();
+            // If the answer is empty after submission, it means a timeout occurred
+            if (data.info === 'Timeout') {
+                clearUI();
+            }
+        }, 5000);
 
         askForm.addEventListener("submit", async (e) => {
             e.preventDefault();
