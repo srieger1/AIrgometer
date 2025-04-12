@@ -3,24 +3,58 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI Answer Display</title>
+    <title>AIrgometer</title>
+    <style>
+        body {
+            background-color: black;
+            color: white;
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+        }
+        header {
+            display: flex;
+            align-items: center;
+            padding: 10px;
+            background-color: #222;
+        }
+        header img {
+            height: 50px;
+            margin-right: 10px;
+        }
+        h1, h2, p {
+            margin-left: 20px;
+        }
+        form {
+            margin-left: 20px;
+        }
+        #answer-display {
+            margin-left: 20px;
+            margin-top: 10px;
+        }
+    </style>
 </head>
 <body>
+    <header>
+        <img src="https://git.maglab.space/mag.lab/corporate-identity/-/raw/master/logo/maglab.svg" alt="mag.lab logo">
+        <h1>AIrgometer</h1>
+    </header>
+    <p>Ask a question and submit Watt seconds to get an answer.</p>
     <h1>Ask a Question</h1>
     <form id="ask-form">
-        <input type="text" id="question" placeholder="Enter your question" autocomplete="off" required>
+        <input type="text" id="question" placeholder="Enter your question" autocomplete="off">
         <button type="submit">Ask</button>
     </form>
 
-    <h2>Answer</h2>
-    <div id="displayed-answer-length"></div> of <div id="answer-length"></div>
-    <div id="answer-display"></div>
-
-    <h2>Submit Watt Seconds</h2>
     <form id="watt-form">
-        <input type="number" id="watt-seconds" placeholder="Enter Watt seconds" required>
-        <button type="submit">Submit</button>
+        <!--<input type="number" id="watt-seconds" placeholder="Enter Watt seconds" value="10">-->
+        <input type="hidden" id="watt-seconds" placeholder="Enter Watt seconds" value="10">
+        <button type="submit">Submit 10 Watt Seconds</button>
     </form>
+
+    <h2>Answer</h2>
+    <div><span id="displayed-answer-length"></span> of <span id="answer-length"></span> chars displayed</div>
+    <div id="answer-display"></div>
 
     <script>
         const askForm = document.getElementById("ask-form");

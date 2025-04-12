@@ -16,20 +16,24 @@ displayed_answer = ""
 submitted_watt_seconds = 0
 last_request_time = time.time()
 timeout_occured = False
+answerStreamRunning = False
 
 # ollama
 def query_ai_model(question):
     global answer
-
+    
     # Send the request to Ollama
     async def chat():
         message = {'role': 'user', 'content': question}
         async for part in await AsyncClient().chat(model='llama3.2', messages=[message], stream=True):
-            global answer
+            global answer, answerStreamRunning
+            answerStreamRunning = True
             # print(part['message']['content'], end='', flush=True)
             partial_answer = part['message']['content']
             print(partial_answer)
             answer += partial_answer
+        #print("Response complete.")
+        answerStreamRunning = False
 
     asyncio.run(chat())
 
@@ -49,6 +53,12 @@ def index():
 
 @app.route("/ask", methods=["POST"])
 def ask_question():
+    global answerStreamRunning
+
+    if answerStreamRunning:
+        print("Answer stream is running. Please wait.")
+        return jsonify({"error": "Answer stream is running. Please wait."}), 400
+    
     reset_state()
 
     question = request.json.get("question")
