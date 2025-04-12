@@ -4,4 +4,4 @@ torch
 torchvision
 torchaudio
 codecarbon
-requests
+ollama

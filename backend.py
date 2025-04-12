@@ -1,111 +1,44 @@
 from flask import Flask, request, jsonify, render_template
+
 import time
 import threading
 
-#from transformers import AutoModelForCausalLM, AutoTokenizer
-# reduce memory usage and improve performance, using CUDA
-#from transformers import AutoModelForCausalLM, AutoTokenizer
-#import torch
-
 #from codecarbon import EmissionsTracker
 
-import requests
-
+import asyncio
+from ollama import AsyncClient
 
 app = Flask(__name__)
 
-# Simulated AI model
-#def query_ai_model(question):
-#    # Replace this with actual AI model query
-#    answer = "This is the generated answer from the AI model."
-#    estimated_watt_minutes = 0.5  # Example: 0.5 Watt Minutes
-#    return answer, estimated_watt_minutes
-
-
-# deepseekv3 CPU
-#model_name = "deepseek/deepseekv3"
-# deepseekv3 with CUDA - also change import above
-#model = AutoModelForCausalLM.from_pretrained("deepseek/deepseekv3", torch_dtype=torch.float16)
-#model = model.to("cuda")
-
-# Load the model and tokenizer
-#tokenizer = AutoTokenizer.from_pretrained(model_name)
-#model = AutoModelForCausalLM.from_pretrained(model_name)
-
-# deepseekv3 api version
-#def query_ai_model(question):
-#    # Tokenize the input question
-#    inputs = tokenizer(question, return_tensors="pt")
-#
-#    # Generate the answer
-#    with torch.no_grad():
-#       outputs = model.generate(**inputs, max_length=100)
-#
-#    # Decode the generated tokens to text
-#    answer = tokenizer.decode(outputs[0], skip_special_tokens=True)
-#
-#    # Estimate the cost in Watt Minutes (example calculation)
-#    # This is a placeholder; replace with actual energy consumption metrics.
-#    estimated_watt_minutes = len(answer.split()) * 0.01  # Example: 0.01 Watt Minutes per word
-#
-#    return answer, estimated_watt_minutes
-
-
-# deepseekv3 with "real" estiamated watt minutes / carbon footprint
-#def query_ai_model(question):
-#    tracker = EmissionsTracker()
-#    tracker.start()
-#
-#    inputs = tokenizer(question, return_tensors="pt")
-#    with torch.no_grad():
-#        outputs = model.generate(**inputs, max_length=100)
-#    answer = tokenizer.decode(outputs[0], skip_special_tokens=True)
-#
-#    tracker.stop()
-#    emissions = tracker.final_emissions
-#    estimated_watt_minutes = emissions * 1000 / 60  # Convert kgCO2 to Watt Minutes (example)
-#
-#    return answer, estimated_watt_minutes
-
-# ollama
-def query_ai_model(question):
-    # Ollama API endpoint
-    url = "http://localhost:11434/api/generate"
-
-    # Payload for the API request
-    payload = {
-        #"model": "llama2",  # Replace with the model you pulled
-        "model": "llama3.2",  # Replace with the model you pulled
-        "prompt": question,
-        "stream": False  # Set to True if you want streaming responses
-    }
-
-    # Send the request to Ollama
-    response = requests.post(url, json=payload)
-    response_data = response.json()
-
-    # Extract the generated answer
-    answer = response_data.get("response", "")
-
-    # Estimate the cost in Watt Minutes (example calculation)
-    # Replace with actual energy consumption metrics.
-    estimated_watt_minutes = len(answer.split()) * 0.01  # Example: 0.01 Watt Minutes per word
-
-    return answer, estimated_watt_minutes
-
 # Global variables to track answer and progress
-current_answer = ""
+answer = ""
 displayed_answer = ""
-estimated_watt_minutes = 0
 submitted_watt_seconds = 0
 last_request_time = time.time()
 timeout_occured = False
 
+# ollama
+def query_ai_model(question):
+    global answer
+
+    # Send the request to Ollama
+    async def chat():
+        message = {'role': 'user', 'content': question}
+        async for part in await AsyncClient().chat(model='llama3.2', messages=[message], stream=True):
+            global answer
+            # print(part['message']['content'], end='', flush=True)
+            partial_answer = part['message']['content']
+            print(partial_answer)
+            answer += partial_answer
+
+    asyncio.run(chat())
+
+    return
+
 def reset_state():
-    global current_answer, displayed_answer, estimated_watt_minutes, last_request_time, submitted_watt_seconds
-    current_answer = ""
+    global answer, displayed_answer, submitted_watt_seconds, last_request_time
+    answer = ""
     displayed_answer = ""
-    estimated_watt_minutes = 0
     submitted_watt_seconds = 0
     last_request_time = time.time()
 
@@ -116,7 +49,6 @@ def index():
 
 @app.route("/ask", methods=["POST"])
 def ask_question():
-    global current_answer, estimated_watt_minutes
     reset_state()
 
     question = request.json.get("question")
@@ -124,21 +56,15 @@ def ask_question():
         return jsonify({"error": "Question is required"}), 400
 
     # Query AI model
-    answer, watt_minutes = query_ai_model(question)
-    current_answer = answer
-    estimated_watt_minutes = watt_minutes
-
-    # Convert Watt Minutes to Watt Seconds
-    estimated_watt_seconds = watt_minutes * 60
+    query_ai_model(question)
 
     return jsonify({
-        "estimated_watt_seconds": estimated_watt_seconds,
         "message": "Question received. Submit Watt seconds to display the answer."
     })
 
 @app.route("/submit_watt_seconds", methods=["POST"])
 def submit_watt_seconds():
-    global displayed_answer, last_request_time, submitted_watt_seconds, timeout_occured
+    global answer, displayed_answer, submitted_watt_seconds, last_request_time, timeout_occured
 
     watt_seconds = request.json.get("watt_seconds")
     if not watt_seconds and watt_seconds != 0:
@@ -148,28 +74,32 @@ def submit_watt_seconds():
         if timeout_occured:
             timeout_occured = False
             return jsonify({"info": "Timeout"}), 200
-        return jsonify({"info": "0 watt seconds submitted. Assumed timeout check"}), 100
+        return jsonify({
+            "info": "0 watt seconds submitted. Assumed backend status check",
+            "answer_length": len(answer),
+            "displayed_answer": displayed_answer,
+            "displayed_answer_length": len(displayed_answer),
+        }), 200
 
     # Update last request time
     last_request_time = time.time()
 
     # Calculate fraction of the answer to display
-    total_watt_seconds = estimated_watt_minutes * 60
-    submitted_watt_seconds = submitted_watt_seconds + watt_seconds
-    print("Submitted Watt Seconds:", submitted_watt_seconds)
-    fraction = min(submitted_watt_seconds / total_watt_seconds, 1.0)
-    displayed_answer = current_answer[:int(fraction * len(current_answer))]
-
+    submitted_watt_seconds += watt_seconds
+    displayed_answer = answer[:int(submitted_watt_seconds)] # one character per watt second, maybe adjust this later, or even
+        # use a more complex formula, e.g., calculating the time it took the model to generate the answer and infer watt seconds
+        # from that
     return jsonify({
         "displayed_answer": displayed_answer,
-        "fraction_displayed": fraction
+        "answer_length": len(answer),
+        "displayed_answer_length": len(displayed_answer),
     })
 
 def check_timeout():
     global timeout_occured
     while True:
         time.sleep(10)  # Check every 10 seconds
-        if current_answer and (time.time() - last_request_time > 20):
+        if displayed_answer and (time.time() - last_request_time > 20):
             print("Timeout reached. Resetting UI.")
             timeout_occured = True
             reset_state()

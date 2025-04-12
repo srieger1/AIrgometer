@@ -8,11 +8,12 @@
 <body>
     <h1>Ask a Question</h1>
     <form id="ask-form">
-        <input type="text" id="question" placeholder="Enter your question" required>
+        <input type="text" id="question" placeholder="Enter your question" autocomplete="off" required>
         <button type="submit">Ask</button>
     </form>
 
     <h2>Answer</h2>
+    <div id="displayed-answer-length"></div> of <div id="answer-length"></div>
     <div id="answer-display"></div>
 
     <h2>Submit Watt Seconds</h2>
@@ -25,6 +26,8 @@
         const askForm = document.getElementById("ask-form");
         const wattForm = document.getElementById("watt-form");
         const answerDisplay = document.getElementById("answer-display");
+        const answerLength = document.getElementById("answer-length");
+        const displayedAnswerLength = document.getElementById("displayed-answer-length");
         const questionInput = document.getElementById("question");
         const wattInput = document.getElementById("watt-seconds");
 
@@ -32,9 +35,11 @@
             questionInput.value = '';
             wattInput.value = '';
             answerDisplay.innerText = '';
+            answerLength.innerText = '';
+            displayedAnswerLength.innerText = '';
         }
 
-        // Check for timeout every 5 seconds
+        // Check for timeout and get answer length
         setInterval(async () => {
             const response = await fetch("/submit_watt_seconds", {
                 method: "POST",
@@ -43,11 +48,16 @@
             });
             
             const data = await response.json();
-            // If the answer is empty after submission, it means a timeout occurred
+            // If the answer states that a timeout occured, clear the UI
             if (data.info === 'Timeout') {
                 clearUI();
             }
-        }, 5000);
+            if(data.answer_length !== undefined) {
+                answerLength.innerText = data.answer_length;
+                displayedAnswerLength.innerText = data.displayed_answer_length;
+                answerDisplay.innerText = data.displayed_answer;
+            }
+        }, 1000);
 
         askForm.addEventListener("submit", async (e) => {
             e.preventDefault();
@@ -60,9 +70,6 @@
             });
 
             const data = await response.json();
-            if (data.estimated_watt_seconds) {
-                alert(`Estimated Watt Seconds: ${data.estimated_watt_seconds}`);
-            }
         });
 
         wattForm.addEventListener("submit", async (e) => {
@@ -76,6 +83,8 @@
             });
 
             const data = await response.json();
+            answerLength.innerText = data.answer_length;
+            displayedAnswerLength.innerText = data.displayed_answer_length;
             if (data.displayed_answer) {
                 answerDisplay.innerText = data.displayed_answer;
             }
