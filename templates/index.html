@@ -39,10 +39,13 @@
         <img src="https://git.maglab.space/mag.lab/corporate-identity/-/raw/master/logo/maglab.svg" alt="mag.lab logo">
         <h1>AIrgometer</h1>
     </header>
-    <p>Ask a question and submit Watt seconds to get an answer.</p>
-    <h1>Ask a Question</h1>
+    <p>Stell eine Frage und steig auf das Ergometer, um die Antwort zu bekommen!</p>
+    <p>Bedenke beim nächsten Mal, 
+       wenn Du ChatGPT und Co eine Frage stellst:<br/>Quellen gehen von 0,3 - 2,5 Wattstunden dafür verbrauchter
+       Energie aus. Ca. 10-mal mehr als bei einer Google-Anfrage.</p>
+    <!--<h1>Deine Frage:</h1>-->
     <form id="ask-form">
-        <input type="text" id="question" placeholder="Enter your question" autocomplete="off">
+        <input type="text" id="question" length="30" height="3" placeholder="Deine Frage" autocomplete="off">
         <button type="submit">Ask</button>
     </form>
 
@@ -52,9 +55,9 @@
         <button type="submit">Submit 10 Watt Seconds</button>
     </form>
 
-    <h2>Answer</h2>
-    <div><span id="displayed-answer-length"></span> of <span id="answer-length"></span> chars displayed</div>
-    <div id="answer-display"></div>
+    <h2>Antwort:</h2>
+    <span id="answer-display"></span><span id="go" style="color:red; visibility: hidden;"></span><span id="finished" style="color:green; visibility: hidden;">GESCHAFFT!</span>
+    <div style="visibility: visible;"><span id="displayed-answer-length"></span> of <span id="answer-length"></span> chars displayed</div>
 
     <script>
         const askForm = document.getElementById("ask-form");
@@ -64,6 +67,8 @@
         const displayedAnswerLength = document.getElementById("displayed-answer-length");
         const questionInput = document.getElementById("question");
         const wattInput = document.getElementById("watt-seconds");
+        const goLabel = document.getElementById("go");
+        const finishedLabel = document.getElementById("finished");
 
         function clearUI() {
             questionInput.value = '';
@@ -71,6 +76,10 @@
             answerDisplay.innerText = '';
             answerLength.innerText = '';
             displayedAnswerLength.innerText = '';
+            goLabel.style.visibility = "hidden";
+            finishedLabel.style.visibility = "hidden";
+            document.getElementById("ask-form").reset();
+            document.getElementById("watt-form").reset();
         }
 
         // Check for timeout and get answer length
@@ -91,7 +100,18 @@
                 displayedAnswerLength.innerText = data.displayed_answer_length;
                 answerDisplay.innerText = data.displayed_answer;
             }
-        }, 1000);
+            if(data.answer_length > 0) {
+                if (data.displayed_answer_length == data.answer_length) {
+                    goLabel.style.visibility = "hidden";
+                    goLabel.innerText = "";
+                    finishedLabel.style.visibility = "visible";
+                } else {
+                    goLabel.style.visibility = "visible";
+                    goLabel.innerText = "TRETEN! TRETEN! TRETEN!";
+                    finishedLabel.style.visibility = "hidden";
+                }
+            }
+        }, 300);
 
         askForm.addEventListener("submit", async (e) => {
             e.preventDefault();

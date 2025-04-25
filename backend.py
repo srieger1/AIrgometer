@@ -8,6 +8,27 @@ import threading
 import asyncio
 from ollama import AsyncClient
 
+import RPi.GPIO as GPIO
+
+PIN = 17
+
+GPIO.setmode(GPIO.BCM)
+GPIO.setup(PIN, GPIO.IN)
+pin_event = asyncio.Event()
+
+
+def gpio_callback(channel):
+    pin_event.set()
+
+GPIO.add_event_detect(PIN, GPIO.BOTH, callback=gpio_callback)
+
+async def wait_for_pin_change():
+    while True:
+        await pin_event.wait()
+        pin_event.clear()
+        state = GPIO.input(PIN)
+        print(f"Pin {PIN} änderte sich auf {'HIGH' if state else 'LOW'}")
+
 app = Flask(__name__)
 
 # Global variables to track answer and progress
@@ -94,6 +115,9 @@ def submit_watt_seconds():
     # Update last request time
     last_request_time = time.time()
 
+    # simulate a button press
+    # GPIO.setup(PIN, GPIO.IN, pull_up_down=GPIO.PUD_UP)
+
     # Calculate fraction of the answer to display
     submitted_watt_seconds += watt_seconds
     displayed_answer = answer[:int(submitted_watt_seconds)] # one character per watt second, maybe adjust this later, or even
@@ -119,5 +143,10 @@ timeout_thread = threading.Thread(target=check_timeout)
 timeout_thread.daemon = True
 timeout_thread.start()
 
-if __name__ == "__main__":
+async def main():
+    await wait_for_pin_change()
+    # Start the Flask app
     app.run(debug=True)
+
+if __name__ == "__main__":
+    asyncio.run(main())
