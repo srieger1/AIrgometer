@@ -8,26 +8,46 @@ import threading
 import asyncio
 from ollama import AsyncClient
 
-import RPi.GPIO as GPIO
-
-PIN = 17
-
-GPIO.setmode(GPIO.BCM)
-GPIO.setup(PIN, GPIO.IN)
-pin_event = asyncio.Event()
+import io
 
 
-def gpio_callback(channel):
-    pin_event.set()
+OLLAMA_API_URL = 'http://admiral-ms-7d30:11434'
+OLLAMA_MODEL = "llama3.2"
+#OLLAMA_MODEL = "deepseek-r1"
 
-GPIO.add_event_detect(PIN, GPIO.BOTH, callback=gpio_callback)
+TIMEOUT= 300
+
+def is_raspberrypi():
+    try:
+        with io.open('/sys/firmware/devicetree/base/model', 'r') as m:
+            if 'raspberry pi' in m.read().lower(): return True
+    except Exception: pass
+    return False
 
 async def wait_for_pin_change():
-    while True:
-        await pin_event.wait()
-        pin_event.clear()
-        state = GPIO.input(PIN)
-        print(f"Pin {PIN} änderte sich auf {'HIGH' if state else 'LOW'}")
+    pass
+
+if is_raspberrypi():
+    import RPi.GPIO as GPIO
+
+    PIN = 17
+
+    GPIO.setmode(GPIO.BCM)
+    GPIO.setup(PIN, GPIO.IN)
+    pin_event = asyncio.Event()
+
+
+    def gpio_callback(channel):
+        pin_event.set()
+
+    GPIO.add_event_detect(PIN, GPIO.BOTH, callback=gpio_callback)
+
+    async def wait_for_pin_change():
+        while True:
+            await pin_event.wait()
+            pin_event.clear()
+            state = GPIO.input(PIN)
+            print(f"Pin {PIN} änderte sich auf {'HIGH' if state else 'LOW'}")
 
 app = Flask(__name__)
 
@@ -46,7 +66,7 @@ def query_ai_model(question):
     # Send the request to Ollama
     async def chat():
         message = {'role': 'user', 'content': question}
-        async for part in await AsyncClient().chat(model='llama3.2', messages=[message], stream=True):
+        async for part in await AsyncClient(host=OLLAMA_API_URL).chat(model=OLLAMA_MODEL, messages=[message], stream=True):
             global answer, answerStreamRunning
             answerStreamRunning = True
             # print(part['message']['content'], end='', flush=True)
@@ -69,8 +89,15 @@ def reset_state():
 
 @app.route("/")
 def index():
+    global TIMEOUT
+    if request.args.get("timeout"):
+        try:
+            TIMEOUT = int(request.args.get("timeout"))
+        except ValueError:
+            return jsonify({"error": "Invalid timeout value"}), 400
+
     reset_state()
-    return render_template("index.html")
+    return render_template("index.html", debug=request.args.get("debug", False))
 
 @app.route("/ask", methods=["POST"])
 def ask_question():
@@ -130,10 +157,10 @@ def submit_watt_seconds():
     })
 
 def check_timeout():
-    global timeout_occured
+    global TIMEOUT, timeout_occured
     while True:
         time.sleep(10)  # Check every 10 seconds
-        if displayed_answer and (time.time() - last_request_time > 20):
+        if answer and (time.time() - last_request_time > TIMEOUT):
             print("Timeout reached. Resetting UI.")
             timeout_occured = True
             reset_state()
@@ -144,9 +171,10 @@ timeout_thread.daemon = True
 timeout_thread.start()
 
 async def main():
-    await wait_for_pin_change()
+    if is_raspberrypi: 
+        await wait_for_pin_change()
     # Start the Flask app
-    app.run(debug=True)
+    await app.run(debug=True)
 
 if __name__ == "__main__":
     asyncio.run(main())
