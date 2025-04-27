@@ -8,36 +8,77 @@
         body {
             background-color: black;
             color: white;
-            font-family: Arial, sans-serif;
+            font-family: ui-sans-serif, -apple-system, system-ui, Segoe UI, Helvetica, Apple Color Emoji, Arial, sans-serif, Segoe UI Emoji, Segoe UI Symbol;
+            font-size: 12px;
             margin: 0;
             padding: 0;
         }
         header {
             display: flex;
             align-items: center;
-            padding: 10px;
+            padding: 2px;
             background-color: #222;
         }
         header img {
             height: 50px;
             margin-right: 10px;
         }
-        h1, h2, p {
+        h1, h2, h3, p {
             margin-left: 20px;
+        }
+        h1 {
+            font-size: 16px;
+        }
+        h2 {
+            font-size: 14px;
+        }
+        h3 {
+            font-size: 12px;
+            font-weight: lighter;
         }
         form {
-            margin-left: 20px;
+            margin-left: 0px;
         }
         #answer-display {
-            margin-left: 20px;
             margin-top: 10px;
+            margin-inline-start: 10px;
+        }
+        input[type="text"], input[type="number"] {
+            /* border: none; */
+            border-radius: 10px;
+            background-color: #333;
+            color: white;
+            padding: 10px;
+            font-size: 12px;
+            width: calc(100% - 40px);
+            margin: 10px 0;
+            box-sizing: border-box;
+            border: 1px solid #777;
+            -webkit-transition: 0.5s;
+            transition: 0.5s;
+            outline: none;
+        }
+        button {
+            border: none;
+            border-radius: 10px;
+            background-color: gray;
+            color: white;
+            padding: 10px 20px;
+            font-size: 12px;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #555;
         }
     </style>
 </head>
 <body>
     <header>
         <img src="https://git.maglab.space/mag.lab/corporate-identity/-/raw/master/logo/maglab.svg" alt="mag.lab logo">
-        <h1>AIrgometer</h1>
+        <div>
+            <h1><span style="color: #AAA;">AI</span>rgometer</h1>
+            <h3>Magrathea Laboratories e.V. Fulda</h3>
+        </div>
     </header>
     <p>Stell eine Frage und steig auf das AIrgometer, um die Antwort zu bekommen!</p>
     <p>Bedenke beim nächsten Mal, 
@@ -47,15 +88,17 @@
     <div style="text-align: center;">
     <form id="ask-form">
         <input type="text" id="question" size="100%" height="3" placeholder="Deine Frage?" autocomplete="off"><br/>
-        <button type="submit">Frage senden und schnell aufs AIrgometer!</button>
+        <button type="submit">Frage senden und ab aufs AIrgometer!</button>
     </form>
 </div>
 
-    <h2>Antwort:</h2>
-    <span id="answer-display" style="overflow: scroll;"></span><span id="go" style="color:red; visibility: hidden;"></span><span id="finished" style="color:green; visibility: hidden;"></span>
+    <h2 style="visibility: hidden;">Antwort:</h2>
+    <div style="margin-left: 20px; margin-right: 20px; text-indent:-10px">
+        <span id="answer-display" style="overflow: scroll;"></span><span id="go" style="color:red; visibility: hidden;"></span><span id="finished" style="color:green; visibility: hidden;"></span>
+    </div>
 
     {% if debug %}
-    <div>
+    <div style="text-align: center;">
     <span style="float: right;">
     (<span id="displayed-answer-length">0</span> of <span id="answer-length">0</span> chars displayed)
     </span>
@@ -76,6 +119,7 @@
         const questionInput = document.getElementById("question");
         const wattInput = document.getElementById("watt-seconds");
         const goLabel = document.getElementById("go");
+        const answerHeading = document.querySelector("h2");
         const finishedLabel = document.getElementById("finished");
 
         function clearUI() {
@@ -87,6 +131,7 @@
             if (displayedAnswerLength) {
                 displayedAnswerLength.innerText = '';
             }
+            answerHeading.style.visibility = "hidden";
             goLabel.style.visibility = "hidden";
             finishedLabel.style.visibility = "hidden";
             document.getElementById("ask-form").reset();
@@ -125,7 +170,8 @@
                     finishedLabel.style.visibility = "visible";
                     finishedLabel.innerText = " GESCHAFFT!";
                 } else {
-                    goLabel.style.visibility = "visible"; 
+                    goLabel.style.visibility = "visible";
+                    answerHeading.style.visibility = "visible";
                     goLabel.innerText = " TRETEN! TRETEN! TRETEN!";
                     finishedLabel.style.visibility = "hidden";
                     finishedLabel.innerText = "";
