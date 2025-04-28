@@ -17,6 +17,8 @@ OLLAMA_MODEL = "llama3.2"
 
 TIMEOUT= 300
 
+DEFAULT_SUBMITTED_WATT_SECONDS = 10
+
 def is_raspberrypi():
     try:
         with io.open('/sys/firmware/devicetree/base/model', 'r') as m:
@@ -47,7 +49,12 @@ if is_raspberrypi():
             await pin_event.wait()
             pin_event.clear()
             state = GPIO.input(PIN)
-            print(f"Pin {PIN} änderte sich auf {'HIGH' if state else 'LOW'}")
+            # Handle the pin change event
+            if state == GPIO.HIGH:
+                # PIN changed to high
+                # add watt seconds
+                watt_seconds = DEFAULT_SUBMITTED_WATT_SECONDS
+                submitted_watt_seconds += watt_seconds
 
 app = Flask(__name__)
 
