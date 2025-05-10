@@ -9,7 +9,6 @@ import asyncio
 from ollama import AsyncClient
 
 import io
-import signal
 import atexit
 
 
@@ -28,7 +27,8 @@ displayed_answer = ""
 submitted_watt_seconds = 0
 last_request_time = time.time()
 timeout_occured = False
-answerStreamRunning = False
+answer_stream_running = False
+gpio_initialized = False
 
 def is_raspberrypi():
     try:
@@ -37,8 +37,13 @@ def is_raspberrypi():
     except Exception: pass
     return False
 
-if is_raspberrypi():
+def init_raspberrypi():
+    global gpio_initialized
+    if gpio_initialized:
+        return
+
     print ("Enabling GPIO input...")
+    gpio_initialized = True
 
     PIN = 10
 
@@ -48,39 +53,19 @@ if is_raspberrypi():
     GPIO.setwarnings(False)
     GPIO.setmode(GPIO.BOARD)
     GPIO.setup(PIN, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
-    pin_event = asyncio.Event()
 
     def gpio_cleanup():
         GPIO.cleanup(PIN)
 
     atexit.register(gpio_cleanup)
-    signal.signal(signal.SIGTERM, gpio_cleanup)
-    signal.signal(signal.SIGINT, gpio_cleanup)    
 
     def gpio_callback(channel):
-        pin_event.set()
-
-    #GPIO.add_event_detect(PIN, GPIO.RISING, callback=gpio_callback, bouncetime=10)
-
-    async def wait_for_pin_change():
         global submitted_watt_seconds
-        print("Waiting for GPIO event...")
-        while True:
-            await pin_event.wait()
-            print("Received GPIO event...")
-            pin_event.clear()
-            state = GPIO.input(PIN)
-            # Handle the pin change event
-            if state == GPIO.HIGH:
-                # PIN changed to high
-                # add watt seconds
-                watt_seconds = DEFAULT_SUBMITTED_WATT_SECONDS
-                submitted_watt_seconds += watt_seconds
+        print("PIN state changed to HIGH, adding watt seconds")
+        watt_seconds = DEFAULT_SUBMITTED_WATT_SECONDS
+        submitted_watt_seconds += watt_seconds
 
-    # Start gpio thread
-    #gpio_thread = threading.Thread(target=wait_for_pin_change)
-    #gpio_thread.daemon = True
-    #gpio_thread.start()
+    GPIO.add_event_detect(PIN, GPIO.RISING, callback=gpio_callback, bouncetime=100)
 
 app = Flask(__name__)
 
@@ -92,14 +77,14 @@ def query_ai_model(question):
     async def chat():
         message = {'role': 'user', 'content': question}
         async for part in await AsyncClient(host=OLLAMA_API_URL).chat(model=OLLAMA_MODEL, messages=[message], stream=True):
-            global answer, answerStreamRunning
-            answerStreamRunning = True
+            global answer, answer_stream_running
+            answer_stream_running = True
             # print(part['message']['content'], end='', flush=True)
             partial_answer = part['message']['content']
             print(partial_answer)
             answer += partial_answer
         #print("Response complete.")
-        answerStreamRunning = False
+        answer_stream_running = False
 
     asyncio.run(chat())
 
@@ -126,9 +111,9 @@ def index():
 
 @app.route("/ask", methods=["POST"])
 def ask_question():
-    global answerStreamRunning
+    global answer_stream_running
 
-    if answerStreamRunning:
+    if answer_stream_running:
         print("Answer stream is running. Please wait.")
         return jsonify({"error": "Answer stream is running. Please wait."}), 400
     
@@ -190,14 +175,17 @@ def check_timeout():
             timeout_occured = True
             reset_state()
 
-# Start timeout thread
-timeout_thread = threading.Thread(target=check_timeout)
-timeout_thread.daemon = True
-timeout_thread.start()
+def main():
+    # Start timeout thread
+    timeout_thread = threading.Thread(target=check_timeout)
+    timeout_thread.daemon = True
+    timeout_thread.start()
 
-async def main():
     # Start the Flask app
-    await app.run(debug=True)
+    if is_raspberrypi() and not gpio_initialized:
+        print("Detected raspberrypi, initializing GPIO...")
+        init_raspberrypi()
+    app.run(debug=False)
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    main()
