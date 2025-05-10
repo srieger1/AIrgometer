@@ -1,7 +1,3 @@
 flask
-transformers
-torch
-torchvision
-torchaudio
-codecarbon
 ollama
+RPi.GPIO

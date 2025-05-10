@@ -10,7 +10,19 @@ import threading
 import asyncio
 from ollama import AsyncClient
 
-app = Flask(__name__)
+import io
+import signal
+import atexit
+
+
+
+OLLAMA_API_URL = 'http://admiral-ms-7d30:11434'
+OLLAMA_MODEL = "llama3.2"
+#OLLAMA_MODEL = "deepseek-r1"
+
+TIMEOUT= 300
+
+DEFAULT_SUBMITTED_WATT_SECONDS = 10
 
 # Global variables to track answer and progress
 answer = ""
@@ -20,6 +32,60 @@ last_request_time = time.time()
 timeout_occured = False
 answerStreamRunning = False
 
+def is_raspberrypi():
+    try:
+        with io.open('/sys/firmware/devicetree/base/model', 'r') as m:
+            if 'raspberry pi' in m.read().lower(): return True
+    except Exception: pass
+    return False
+
+if is_raspberrypi():
+    print ("Enabling GPIO input...")
+
+    PIN = 10
+
+    import RPi.GPIO as GPIO
+
+    #GPIO.setmode(GPIO.BCM)
+    GPIO.setwarnings(False)
+    GPIO.setmode(GPIO.BOARD)
+    GPIO.setup(PIN, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
+    pin_event = asyncio.Event()
+
+    def gpio_cleanup():
+        GPIO.cleanup(PIN)
+
+    atexit.register(gpio_cleanup)
+    signal.signal(signal.SIGTERM, gpio_cleanup)
+    signal.signal(signal.SIGINT, gpio_cleanup)    
+
+    def gpio_callback(channel):
+        pin_event.set()
+
+    #GPIO.add_event_detect(PIN, GPIO.RISING, callback=gpio_callback, bouncetime=10)
+
+    async def wait_for_pin_change():
+        global submitted_watt_seconds
+        print("Waiting for GPIO event...")
+        while True:
+            await pin_event.wait()
+            print("Received GPIO event...")
+            pin_event.clear()
+            state = GPIO.input(PIN)
+            # Handle the pin change event
+            if state == GPIO.HIGH:
+                # PIN changed to high
+                # add watt seconds
+                watt_seconds = DEFAULT_SUBMITTED_WATT_SECONDS
+                submitted_watt_seconds += watt_seconds
+
+    # Start gpio thread
+    #gpio_thread = threading.Thread(target=wait_for_pin_change)
+    #gpio_thread.daemon = True
+    #gpio_thread.start()
+
+app = Flask(__name__)
+
 # ollama
 def query_ai_model(question):
     global answer
@@ -27,7 +93,7 @@ def query_ai_model(question):
     # Send the request to Ollama
     async def chat():
         message = {'role': 'user', 'content': question}
-        async for part in await AsyncClient().chat(model='llama3.2', messages=[message], stream=True):
+        async for part in await AsyncClient(host=OLLAMA_API_URL).chat(model=OLLAMA_MODEL, messages=[message], stream=True):
             global answer, answerStreamRunning
             answerStreamRunning = True
             # print(part['message']['content'], end='', flush=True)
@@ -50,8 +116,15 @@ def reset_state():
 
 @app.route("/")
 def index():
+    global TIMEOUT
+    if request.args.get("timeout"):
+        try:
+            TIMEOUT = int(request.args.get("timeout"))
+        except ValueError:
+            return jsonify({"error": "Invalid timeout value"}), 400
+
     reset_state()
-    return render_template("index.html")
+    return render_template("index.html", debug=request.args.get("debug", False))
 
 @app.route("/ask", methods=["POST"])
 def ask_question():
@@ -96,6 +169,9 @@ def submit_watt_seconds():
     # Update last request time
     last_request_time = time.time()
 
+    # simulate a button press
+    # GPIO.setup(PIN, GPIO.IN, pull_up_down=GPIO.PUD_UP)
+
     # Calculate fraction of the answer to display
     submitted_watt_seconds += watt_seconds
     displayed_answer = answer[:int(submitted_watt_seconds)] # one character per watt second, maybe adjust this later, or even
@@ -108,10 +184,10 @@ def submit_watt_seconds():
     })
 
 def check_timeout():
-    global timeout_occured
+    global TIMEOUT, timeout_occured
     while True:
         time.sleep(10)  # Check every 10 seconds
-        if displayed_answer and (time.time() - last_request_time > 20):
+        if answer and (time.time() - last_request_time > TIMEOUT):
             print("Timeout reached. Resetting UI.")
             timeout_occured = True
             reset_state()
@@ -121,5 +197,9 @@ timeout_thread = threading.Thread(target=check_timeout)
 timeout_thread.daemon = True
 timeout_thread.start()
 
+async def main():
+    # Start the Flask app
+    await app.run(debug=True)
+
 if __name__ == "__main__":
-    app.run(debug=True)
+    asyncio.run(main())
