@@ -9,6 +9,9 @@ import asyncio
 from ollama import AsyncClient
 
 import io
+import signal
+import atexit
+
 
 
 OLLAMA_API_URL = 'http://admiral-ms-7d30:11434'
@@ -19,6 +22,14 @@ TIMEOUT= 300
 
 DEFAULT_SUBMITTED_WATT_SECONDS = 10
 
+# Global variables to track answer and progress
+answer = ""
+displayed_answer = ""
+submitted_watt_seconds = 0
+last_request_time = time.time()
+timeout_occured = False
+answerStreamRunning = False
+
 def is_raspberrypi():
     try:
         with io.open('/sys/firmware/devicetree/base/model', 'r') as m:
@@ -26,27 +37,37 @@ def is_raspberrypi():
     except Exception: pass
     return False
 
-async def wait_for_pin_change():
-    pass
-
 if is_raspberrypi():
+    print ("Enabling GPIO input...")
+
+    PIN = 10
+
     import RPi.GPIO as GPIO
 
-    PIN = 17
-
-    GPIO.setmode(GPIO.BCM)
-    GPIO.setup(PIN, GPIO.IN)
+    #GPIO.setmode(GPIO.BCM)
+    GPIO.setwarnings(False)
+    GPIO.setmode(GPIO.BOARD)
+    GPIO.setup(PIN, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
     pin_event = asyncio.Event()
 
+    def gpio_cleanup():
+        GPIO.cleanup(PIN)
+
+    atexit.register(gpio_cleanup)
+    signal.signal(signal.SIGTERM, gpio_cleanup)
+    signal.signal(signal.SIGINT, gpio_cleanup)    
 
     def gpio_callback(channel):
         pin_event.set()
 
-    GPIO.add_event_detect(PIN, GPIO.BOTH, callback=gpio_callback)
+    #GPIO.add_event_detect(PIN, GPIO.RISING, callback=gpio_callback, bouncetime=10)
 
     async def wait_for_pin_change():
+        global submitted_watt_seconds
+        print("Waiting for GPIO event...")
         while True:
             await pin_event.wait()
+            print("Received GPIO event...")
             pin_event.clear()
             state = GPIO.input(PIN)
             # Handle the pin change event
@@ -56,15 +77,12 @@ if is_raspberrypi():
                 watt_seconds = DEFAULT_SUBMITTED_WATT_SECONDS
                 submitted_watt_seconds += watt_seconds
 
-app = Flask(__name__)
+    # Start gpio thread
+    #gpio_thread = threading.Thread(target=wait_for_pin_change)
+    #gpio_thread.daemon = True
+    #gpio_thread.start()
 
-# Global variables to track answer and progress
-answer = ""
-displayed_answer = ""
-submitted_watt_seconds = 0
-last_request_time = time.time()
-timeout_occured = False
-answerStreamRunning = False
+app = Flask(__name__)
 
 # ollama
 def query_ai_model(question):
@@ -178,8 +196,6 @@ timeout_thread.daemon = True
 timeout_thread.start()
 
 async def main():
-    if is_raspberrypi: 
-        await wait_for_pin_change()
     # Start the Flask app
     await app.run(debug=True)
 
