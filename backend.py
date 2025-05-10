@@ -19,7 +19,7 @@ OLLAMA_API_URL = 'http://admiral-ms-7d30:11434'
 OLLAMA_MODEL = "llama3.2"
 #OLLAMA_MODEL = "deepseek-r1"
 
-TIMEOUT= 300
+TIMEOUT= 30
 
 DEFAULT_SUBMITTED_WATT_SECONDS = 10
 
@@ -27,7 +27,7 @@ DEFAULT_SUBMITTED_WATT_SECONDS = 10
 answer = ""
 displayed_answer = ""
 submitted_watt_seconds = 0
-last_request_time = time.time()
+last_increment_time = time.time()
 timeout_occured = False
 answer_stream_running = False
 gpio_initialized = False
@@ -64,8 +64,7 @@ def init_raspberrypi():
     def gpio_callback(channel):
         global submitted_watt_seconds
         print("PIN state changed to HIGH, adding watt seconds")
-        watt_seconds = DEFAULT_SUBMITTED_WATT_SECONDS
-        submitted_watt_seconds += watt_seconds
+        add_watt_seconds(DEFAULT_SUBMITTED_WATT_SECONDS)
 
     GPIO.add_event_detect(PIN, GPIO.RISING, callback=gpio_callback, bouncetime=100)
 
@@ -92,12 +91,26 @@ def query_ai_model(question):
 
     return
 
+def add_watt_seconds(watt_seconds):
+    global last_increment_time, submitted_watt_seconds, displayed_answer
+    # simulate a button press
+    # GPIO.setup(PIN, GPIO.IN, pull_up_down=GPIO.PUD_UP)
+
+    # Update last request time
+    last_increment_time = time.time()
+
+    # Calculate fraction of the answer to display
+    submitted_watt_seconds += watt_seconds
+    displayed_answer = answer[:int(submitted_watt_seconds)] # one character per watt second, maybe adjust this later, or even
+        # use a more complex formula, e.g., calculating the time it took the model to generate the answer and infer watt seconds
+        # from that
+
 def reset_state():
-    global answer, displayed_answer, submitted_watt_seconds, last_request_time
+    global answer, displayed_answer, submitted_watt_seconds, last_increment_time
     answer = ""
     displayed_answer = ""
     submitted_watt_seconds = 0
-    last_request_time = time.time()
+    last_increment_time = time.time()
 
 @app.route("/")
 def index():
@@ -134,7 +147,7 @@ def ask_question():
 
 @app.route("/submit_watt_seconds", methods=["POST"])
 def submit_watt_seconds():
-    global answer, displayed_answer, submitted_watt_seconds, last_request_time, timeout_occured
+    global answer, displayed_answer, submitted_watt_seconds, last_increment_time, timeout_occured
 
     watt_seconds = request.json.get("watt_seconds")
     if not watt_seconds and watt_seconds != 0:
@@ -151,17 +164,9 @@ def submit_watt_seconds():
             "displayed_answer_length": len(displayed_answer),
         }), 200
 
-    # Update last request time
-    last_request_time = time.time()
+    # add watt seconds
+    add_watt_seconds(watt_seconds)
 
-    # simulate a button press
-    # GPIO.setup(PIN, GPIO.IN, pull_up_down=GPIO.PUD_UP)
-
-    # Calculate fraction of the answer to display
-    submitted_watt_seconds += watt_seconds
-    displayed_answer = answer[:int(submitted_watt_seconds)] # one character per watt second, maybe adjust this later, or even
-        # use a more complex formula, e.g., calculating the time it took the model to generate the answer and infer watt seconds
-        # from that
     return jsonify({
         "displayed_answer": displayed_answer,
         "answer_length": len(answer),
@@ -172,7 +177,7 @@ def check_timeout():
     global TIMEOUT, timeout_occured
     while True:
         time.sleep(10)  # Check every 10 seconds
-        if answer and (time.time() - last_request_time > TIMEOUT):
+        if answer and (time.time() - last_increment_time > TIMEOUT):
             print("Timeout reached. Resetting UI.")
             timeout_occured = True
             reset_state()

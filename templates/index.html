@@ -80,23 +80,23 @@
             <h3>Magrathea Laboratories e.V. Fulda</h3>
         </div>
     </header>
-    <p>Stell eine Frage und steig auf das AIrgometer, um die Antwort zu bekommen!</p>
-    <p>Bedenke beim nächsten Mal, 
-       wenn Du ChatGPT und Co eine Frage stellst:<br/>Quellen gehen von 0,3 - 2,5 Wattstunden dafür verbrauchter
+    <p>Stell eine Frage und steig auf das AIrgometer, um die Antwort zu bekommen!
+       Bedenke beim nächsten Mal, 
+       wenn Du ChatGPT und Co eine Frage stellst: man geht von 0,3 - 2,5 Wattstunden dafür verbrauchter
        Energie aus. Ca. 10-mal mehr als bei einer Google-Anfrage.</p>
     <!--<h1>Deine Frage:</h1>-->
+
+    <!--<h2 style="visibility: hidden;">Antwort:</h2>-->
+    <div style="margin-left: 20px; margin-right: 20px; text-indent:-10px">
+        <span id="answer-display" style="overflow: scroll;"></span><span id="go" style="color:red; visibility: hidden;"></span><span id="finished" style="color:green; visibility: hidden;"></span>
+    </div>
+
     <div style="text-align: center;">
     <form id="ask-form">
         <input type="text" id="question" size="100%" height="3" placeholder="Deine Frage?" autocomplete="off"><br/>
         <button type="submit">Frage senden und ab aufs AIrgometer!</button>
     </form>
-</div>
-
-    <h2 style="visibility: hidden;">Antwort:</h2>
-    <div style="margin-left: 20px; margin-right: 20px; text-indent:-10px">
-        <span id="answer-display" style="overflow: scroll;"></span><span id="go" style="color:red; visibility: hidden;"></span><span id="finished" style="color:green; visibility: hidden;"></span>
     </div>
-
     {% if debug %}
     <div style="text-align: center;">
     <span style="float: right;">
@@ -119,7 +119,7 @@
         const questionInput = document.getElementById("question");
         const wattInput = document.getElementById("watt-seconds");
         const goLabel = document.getElementById("go");
-        const answerHeading = document.querySelector("h2");
+        //const answerHeading = document.querySelector("h2");
         const finishedLabel = document.getElementById("finished");
 
         function clearUI() {
@@ -131,7 +131,7 @@
             if (displayedAnswerLength) {
                 displayedAnswerLength.innerText = '';
             }
-            answerHeading.style.visibility = "hidden";
+            //answerHeading.style.visibility = "hidden";
             goLabel.style.visibility = "hidden";
             finishedLabel.style.visibility = "hidden";
             document.getElementById("ask-form").reset();
@@ -171,7 +171,7 @@
                     finishedLabel.innerText = " GESCHAFFT!";
                 } else {
                     goLabel.style.visibility = "visible";
-                    answerHeading.style.visibility = "visible";
+                    //answerHeading.style.visibility = "visible";
                     goLabel.innerText = " TRETEN! TRETEN! TRETEN!";
                     finishedLabel.style.visibility = "hidden";
                     finishedLabel.innerText = "";
