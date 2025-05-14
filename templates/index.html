@@ -18,6 +18,21 @@
             align-items: center;
             padding: 2px;
             background-color: #222;
+            z-index: 1000;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 60px;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.5);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            font-size: 12px;
+            font-weight: bold;
+            color: white;
+            text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+            box-sizing: border-box;
         }
         header img {
             height: 50px;
@@ -80,7 +95,7 @@
             <h3>Magrathea Laboratories e.V. Fulda</h3>
         </div>
     </header>
-    <p>Stell eine Frage und steig auf das AIrgometer, um die Antwort zu bekommen!
+    <p style="padding-top: 60px;color: gray;">Stell eine Frage und steig auf das AIrgometer, um die Antwort zu bekommen!
        Bedenke beim nächsten Mal, 
        wenn Du ChatGPT und Co eine Frage stellst: man geht von 0,3 - 2,5 Wattstunden dafür verbrauchter
        Energie aus. Ca. 10-mal mehr als bei einer Google-Anfrage.</p>
@@ -93,7 +108,7 @@
 
     <div style="text-align: center;">
     <form id="ask-form">
-        <input type="text" id="question" size="100%" height="3" placeholder="Deine Frage?" autocomplete="off"><br/>
+        <input type="text" id="question" size="100%" placeholder="Deine Frage?" autocomplete="off"><br/>
         <button type="submit">Frage senden und ab aufs AIrgometer!</button>
     </form>
     </div>
@@ -125,6 +140,10 @@
         function clearUI() {
             questionInput.value = '';
             answerDisplay.innerText = '';
+            goLabel.innerText = "";
+            goLabel.style.visibility = "hidden";
+            finishedLabel.innerText = "";
+            finishedLabel.style.visibility = "hidden";
             if (answerLength) {
                 answerLength.innerText = '';
             }
@@ -132,8 +151,6 @@
                 displayedAnswerLength.innerText = '';
             }
             //answerHeading.style.visibility = "hidden";
-            goLabel.style.visibility = "hidden";
-            finishedLabel.style.visibility = "hidden";
             document.getElementById("ask-form").reset();
             if (document.getElementById("watt-form")) {
                 wattInput.value = '';
@@ -143,6 +160,7 @@
 
         // Check for timeout and get answer length
         setInterval(async () => {
+            const question = document.getElementById("question");
             const response = await fetch("/submit_watt_seconds", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
@@ -153,31 +171,40 @@
             // If the answer states that a timeout occured, clear the UI
             if (data.info === 'Timeout') {
                 clearUI();
-            }
-            if(data.answer_length !== undefined) {
-                if (answerLength) {
-                    answerLength.innerText = data.answer_length;
+                const response = await fetch("/submit_watt_seconds", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ watt_seconds: 0, cleared: true })
+                });
+            } else {
+                if(data.answer_length !== undefined) {
+                    if (answerLength) {
+                        answerLength.innerText = data.answer_length;
+                    }
+                    if (displayedAnswerLength) {
+                        displayedAnswerLength.innerText = data.displayed_answer_length;
+                    }
+                    answerDisplay.innerText = data.displayed_answer;
                 }
-                if (displayedAnswerLength) {
-                    displayedAnswerLength.innerText = data.displayed_answer_length;
+                if(data.answer_length > 0) {
+                    if (data.displayed_answer_length == data.answer_length) {
+                        goLabel.style.visibility = "hidden";
+                        goLabel.innerText = "";
+                        finishedLabel.style.visibility = "visible";
+                        finishedLabel.innerText = " GESCHAFFT!";
+                    } else {
+                        goLabel.style.visibility = "visible";
+                        //answerHeading.style.visibility = "visible";
+                        goLabel.innerText = " TRETEN! TRETEN! TRETEN! (" + Math.round((data.displayed_answer_length / data.answer_length) * 100) + "%)";
+                        finishedLabel.style.visibility = "hidden";
+                        finishedLabel.innerText = "";
+                    }
+                    //window.scrollTo(0, document.body.scrollHeight);
+                    //askForm.focus();
                 }
-                answerDisplay.innerText = data.displayed_answer;
             }
-            if(data.answer_length > 0) {
-                if (data.displayed_answer_length == data.answer_length) {
-                    goLabel.style.visibility = "hidden";
-                    goLabel.innerText = "";
-                    finishedLabel.style.visibility = "visible";
-                    finishedLabel.innerText = " GESCHAFFT!";
-                } else {
-                    goLabel.style.visibility = "visible";
-                    //answerHeading.style.visibility = "visible";
-                    goLabel.innerText = " TRETEN! TRETEN! TRETEN!";
-                    finishedLabel.style.visibility = "hidden";
-                    finishedLabel.innerText = "";
-                }
-                window.scrollTo(0, document.body.scrollHeight);
-            }
+            question.scrollIntoView({ behavior: "smooth" });
+            question.focus();
         }, 1000);
 
         askForm.addEventListener("submit", async (e) => {

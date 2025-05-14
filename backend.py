@@ -19,7 +19,7 @@ OLLAMA_API_URL = 'http://admiral-ms-7d30:11434'
 OLLAMA_MODEL = "llama3.2"
 #OLLAMA_MODEL = "deepseek-r1"
 
-TIMEOUT= 30
+TIMEOUT= 300
 
 DEFAULT_SUBMITTED_WATT_SECONDS = 10
 
@@ -126,7 +126,7 @@ def index():
 
 @app.route("/ask", methods=["POST"])
 def ask_question():
-    global answer_stream_running
+    global answer_stream_running, timeout_occured
 
     if answer_stream_running:
         print("Answer stream is running. Please wait.")
@@ -139,6 +139,7 @@ def ask_question():
         return jsonify({"error": "Question is required"}), 400
 
     # Query AI model
+    timeout_occured = False
     query_ai_model(question)
 
     return jsonify({
@@ -150,33 +151,38 @@ def submit_watt_seconds():
     global answer, displayed_answer, submitted_watt_seconds, last_increment_time, timeout_occured
 
     watt_seconds = request.json.get("watt_seconds")
+    cleared = request.json.get("cleared", False)
     if not watt_seconds and watt_seconds != 0:
         return jsonify({"error": "Watt seconds are required"}), 400
 
     if watt_seconds == 0:
-        if timeout_occured:
-            timeout_occured = False
-            return jsonify({"info": "Timeout"}), 200
+        if timeout_occured == True:
+            if cleared:
+                timeout_occured = False
+                return jsonify({"info": "Timeout cleared"}), 200
+            else:
+                return jsonify({"info": "Timeout"}), 200
+        else:
+            return jsonify({
+                "info": "0 watt seconds submitted. Assumed backend status check",
+                "answer_length": len(answer),
+                "displayed_answer": displayed_answer,
+                "displayed_answer_length": len(displayed_answer),
+            }), 200
+    else:
+        # add watt seconds
+        add_watt_seconds(watt_seconds)
+
         return jsonify({
-            "info": "0 watt seconds submitted. Assumed backend status check",
-            "answer_length": len(answer),
             "displayed_answer": displayed_answer,
+            "answer_length": len(answer),
             "displayed_answer_length": len(displayed_answer),
-        }), 200
-
-    # add watt seconds
-    add_watt_seconds(watt_seconds)
-
-    return jsonify({
-        "displayed_answer": displayed_answer,
-        "answer_length": len(answer),
-        "displayed_answer_length": len(displayed_answer),
-    })
+        })
 
 def check_timeout():
-    global TIMEOUT, timeout_occured
+    global timeout_occured
     while True:
-        time.sleep(10)  # Check every 10 seconds
+        time.sleep(1)  # Check every second
         if answer and (time.time() - last_increment_time > TIMEOUT):
             print("Timeout reached. Resetting UI.")
             timeout_occured = True
