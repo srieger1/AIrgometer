@@ -16,12 +16,15 @@ import atexit
 
 
 OLLAMA_API_URL = 'http://admiral-ms-7d30:11434'
-OLLAMA_MODEL = "llama3.2"
+#OLLAMA_MODEL = "llama3.2"
 #OLLAMA_MODEL = "deepseek-r1"
+OLLAMA_MODEL = "qwen3:8b"
 
 TIMEOUT= 300
 
 DEFAULT_SUBMITTED_WATT_SECONDS = 10
+
+PROLOG = '/no_think Du sollst Kindern zeigen, wieviel Energie für Anfragen an eine künstliche Intelligenz benötigt wird. Du musst aber in Deiner Antwort nicht sagen, was Du bist. Antworte so, dass es ein Kind zwischen 7 und 14 versteht. Meine Frage an Dich ist: '
 
 # Global variables to track answer and progress
 answer = ""
@@ -76,13 +79,19 @@ def query_ai_model(question):
     
     # Send the request to Ollama
     async def chat():
-        message = {'role': 'user', 'content': question}
+        message = {'role': 'user', 'content': PROLOG + question}
+        # message = {'role': 'user', 'content': question}
         async for part in await AsyncClient(host=OLLAMA_API_URL).chat(model=OLLAMA_MODEL, messages=[message], stream=True):
             global answer, answer_stream_running
             answer_stream_running = True
             # print(part['message']['content'], end='', flush=True)
             partial_answer = part['message']['content']
             print(partial_answer)
+            # if partial_answer contains '<think>' or '</think>', filter it out
+            if '<think>' in partial_answer:
+                partial_answer = partial_answer.replace('<think>', '')
+            if '</think>' in partial_answer:
+                partial_answer = partial_answer.replace('</think>', '')
             answer += partial_answer
         #print("Response complete.")
         answer_stream_running = False
