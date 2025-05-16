@@ -22,7 +22,7 @@ OLLAMA_MODEL = "qwen3:8b"
 
 TIMEOUT= 300
 
-DEFAULT_SUBMITTED_WATT_SECONDS = 10
+DEFAULT_SUBMITTED_WATT_SECONDS = 5
 
 PROLOG = '/no_think Du sollst Kindern zeigen, wieviel Energie für Anfragen an eine künstliche Intelligenz benötigt wird. Du musst aber in Deiner Antwort nicht sagen, was Du bist. Antworte so, dass es ein Kind zwischen 7 und 14 versteht. Meine Frage an Dich ist: '
 
