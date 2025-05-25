@@ -12,6 +12,7 @@ from ollama import AsyncClient
 
 import io
 import atexit
+import sys
 
 
 
@@ -20,11 +21,14 @@ OLLAMA_API_URL = 'http://admiral-ms-7d30:11434'
 #OLLAMA_MODEL = "deepseek-r1"
 OLLAMA_MODEL = "qwen3:8b"
 
-TIMEOUT= 300
+TIMEOUT= 300 # timeout in seconds after which the UI is reset if no watt seconds are submitted
+
+DEBUG_MODE = False # debug mode is set to False for production use and to avoid issues with duplicate GPIO initialization
+MAXIMUM_ANSWER_LENGTH = 10000  # maximum length of the answer to display
 
 DEFAULT_SUBMITTED_WATT_SECONDS = 4
 
-PROLOG = '/no_think Du sollst Kindern zeigen, wieviel Energie für Anfragen an eine künstliche Intelligenz benötigt wird. Du musst aber in Deiner Antwort nicht sagen, was Du bist. Antworte so, dass es ein Kind zwischen 7 und 14 versteht. Meine Frage an Dich ist: '
+PROLOG = '/no_think Du sollst Kindern zeigen, wieviel Energie für Anfragen an eine künstliche Intelligenz benötigt wird. Du musst aber in Deiner Antwort nicht sagen, was Du bist. Antworte so, dass es ein Kind zwischen 7 und 14 versteht. Du wurdest vom Magrathea Laboratories e.V. gebaut, einem Hackspace in Fulda. Man kann den Hackspace freitags ab 20 Uhr in der Lindenstraße besuchen. Meine Frage an Dich ist: '
 
 # Global variables to track answer and progress
 answer = ""
@@ -44,6 +48,7 @@ def is_raspberrypi():
 
 def init_raspberrypi():
     global gpio_initialized
+    # can be removed as GPIO errors seam to be coming from Flask debug mode
     if gpio_initialized:
         return
 
@@ -87,12 +92,11 @@ def query_ai_model(question):
             # print(part['message']['content'], end='', flush=True)
             partial_answer = part['message']['content']
             print(partial_answer)
-            # if partial_answer contains '<think>' or '</think>', filter it out
-            if '<think>' in partial_answer:
-                partial_answer = partial_answer.replace('<think>', '')
-            if '</think>' in partial_answer:
-                partial_answer = partial_answer.replace('</think>', '')
             answer += partial_answer
+            # if answer is too long, stop streaming
+            if len(answer) > MAXIMUM_ANSWER_LENGTH:
+                print("Answer too long, stopping streaming.")
+                break
         #print("Response complete.")
         answer_stream_running = False
 
@@ -101,7 +105,7 @@ def query_ai_model(question):
     return
 
 def add_watt_seconds(watt_seconds):
-    global last_increment_time, submitted_watt_seconds, displayed_answer
+    global last_increment_time, submitted_watt_seconds, answer, displayed_answer
     # simulate a button press
     # GPIO.setup(PIN, GPIO.IN, pull_up_down=GPIO.PUD_UP)
 
@@ -110,6 +114,13 @@ def add_watt_seconds(watt_seconds):
 
     # Calculate fraction of the answer to display
     submitted_watt_seconds += watt_seconds
+
+    # intial cleanup of answer, e.g., remove leading whitespace and <think> tags
+    if len(displayed_answer) == 0 and len(answer) > 0:
+        # remove leading whitespace and <think> tags
+        answer = answer.replace('<think>', '').replace('</think>', '').lstrip(" \n\t")
+
+    # append addtional fraction to displayed answer
     displayed_answer = answer[:int(submitted_watt_seconds)] # one character per watt second, maybe adjust this later, or even
         # use a more complex formula, e.g., calculating the time it took the model to generate the answer and infer watt seconds
         # from that
@@ -136,24 +147,27 @@ def index():
 @app.route("/ask", methods=["POST"])
 def ask_question():
     global answer_stream_running, timeout_occured
+    if request.json.get("test", False):
+        submit_watt_seconds()
+    else:
+        if answer_stream_running:
+            print("Answer stream is running. Please wait.")
+            return jsonify({"error": "Answer stream is running. Please wait."}), 400
+        
+        reset_state()
 
-    if answer_stream_running:
-        print("Answer stream is running. Please wait.")
-        return jsonify({"error": "Answer stream is running. Please wait."}), 400
-    
-    reset_state()
+        question = request.json.get("question")
+        if not question:
+            print("No question provided.")
+            return jsonify({"error": "Question is required"}), 400
 
-    question = request.json.get("question")
-    if not question:
-        return jsonify({"error": "Question is required"}), 400
+        # Query AI model
+        timeout_occured = False
+        query_ai_model(question)
 
-    # Query AI model
-    timeout_occured = False
-    query_ai_model(question)
-
-    return jsonify({
-        "message": "Question received. Submit Watt seconds to display the answer."
-    })
+        return jsonify({
+            "message": "Question received. Submit Watt seconds to display the answer."
+        })
 
 @app.route("/submit_watt_seconds", methods=["POST"])
 def submit_watt_seconds():
@@ -172,6 +186,7 @@ def submit_watt_seconds():
             else:
                 return jsonify({"info": "Timeout"}), 200
         else:
+            print("No watt seconds submitted, assuming backend status check.")
             return jsonify({
                 "info": "0 watt seconds submitted. Assumed backend status check",
                 "answer_length": len(answer),
@@ -182,6 +197,7 @@ def submit_watt_seconds():
         # add watt seconds
         add_watt_seconds(watt_seconds)
 
+        print(f"Added {watt_seconds} watt seconds. Total watt seconds: {submitted_watt_seconds}")
         return jsonify({
             "displayed_answer": displayed_answer,
             "answer_length": len(answer),
@@ -198,6 +214,7 @@ def check_timeout():
             reset_state()
 
 def main():
+    global DEBUG_MODE, TIMEOUT
     # Start timeout thread
     timeout_thread = threading.Thread(target=check_timeout)
     timeout_thread.daemon = True
@@ -207,7 +224,13 @@ def main():
     if is_raspberrypi() and not gpio_initialized:
         print("Detected raspberrypi, initializing GPIO...")
         init_raspberrypi()
-    app.run(debug=False)
+    
+    # if arguments are passed, use them as debug mode
+    if len(sys.argv) > 1 and sys.argv[1] == "debug":
+        DEBUG_MODE = True
+        TIMEOUT = 10  # Set a shorter timeout for debugging
+
+    app.run(debug=DEBUG_MODE,host='0.0.0.0')
 
 if __name__ == "__main__":
     main()
