@@ -3,78 +3,195 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" href="/static/maglab.svg" type="image/svg+xml">
     <title>AIrgometer</title>
     <style>
         body {
             background-color: black;
             color: white;
-            font-family: Arial, sans-serif;
+            font-family: sans-serif;
+            font-size: 12px;
             margin: 0;
             padding: 0;
+            padding-bottom: 100px; /* Prevent content from being hidden behind the fixed form */
         }
         header {
             display: flex;
             align-items: center;
-            padding: 10px;
+            padding: 2px;
             background-color: #222;
+            z-index: 1000;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 60px;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.5);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            font-size: 12px;
+            font-weight: bold;
+            color: white;
+            text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+            box-sizing: border-box;
         }
         header img {
             height: 50px;
             margin-right: 10px;
         }
-        h1, h2, p {
+        h1, h2, h3, p {
             margin-left: 20px;
+            margin: 0;
+        }
+        h1 {
+            font-size: 28px;
+        }
+        h2 {
+            font-size: 14px;
+        }
+        h3 {
+            font-size: 12px;
+            font-weight: lighter;
         }
         form {
-            margin-left: 20px;
+            margin-left: 0px;
+        }
+        #ask-form-container {
+            position: fixed;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: #222;
+            padding: 0 0 8px 0;
+            z-index: 1001;
+            box-shadow: 0 -2px 5px rgba(0,0,0,0.5);
+            text-align: center;
+        }
+        #ask-form {
+            margin: 0 auto;
+            display: inline-block;
         }
         #answer-display {
-            margin-left: 20px;
-            margin-top: 10px;
+            /*margin-top: 10px;*/
+            margin-inline-start: 10px;
+            /* max-height: 200px; */
+            overflow-y: scroll;
+            display: block;
+            /* Optional: add a border or background for clarity */
+            background: #222;
+            border-radius: 8px;
+            padding: 8px;
+        }
+        input[type="text"], input[type="number"] {
+            /* border: none; */
+            border-radius: 10px;
+            background-color: #333;
+            color: white;
+            padding: 10px;
+            font-size: 12px;
+            width: calc(100% - 40px);
+            margin: 10px 0;
+            box-sizing: border-box;
+            border: 1px solid #777;
+            -webkit-transition: 0.5s;
+            transition: 0.5s;
+            outline: none;
+        }
+        button {
+            border: none;
+            border-radius: 10px;
+            background-color: gray;
+            color: white;
+            padding: 10px 20px;
+            font-size: 12px;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #555;
         }
     </style>
 </head>
-<body>
+<body onload="focusQuestionInput()">
     <header>
-        <img src="https://git.maglab.space/mag.lab/corporate-identity/-/raw/master/logo/maglab.svg" alt="mag.lab logo">
-        <h1>AIrgometer</h1>
+        <img src="/static/maglab.svg" alt="mag.lab logo">
+        <div>
+            <span style="font-family: 'Times New Roman', Times, serif;"><h1><span style="color: #AAA;">AI</span>rgometer</h1></span>
+            <h3>Magrathea Laboratories e.V. Fulda</h3>
+        </div>
     </header>
-    <p>Ask a question and submit Watt seconds to get an answer.</p>
-    <h1>Ask a Question</h1>
-    <form id="ask-form">
-        <input type="text" id="question" placeholder="Enter your question" autocomplete="off">
-        <button type="submit">Ask</button>
-    </form>
+    <p style="padding-top: 60px;color: gray; margin: 10px;">Stell eine Frage und steig auf das AIrgometer, um die Antwort zu bekommen!
+       Bedenke beim nächsten Mal, 
+       wenn Du ChatGPT und Co eine Frage stellst: man geht von 0,3 - 2,5 Wattstunden dafür verbrauchter
+       Energie aus. Ca. 10-mal mehr als bei einer Google-Anfrage.</p>
 
-    <form id="watt-form">
-        <!--<input type="number" id="watt-seconds" placeholder="Enter Watt seconds" value="10">-->
-        <input type="number" id="watt-seconds" placeholder="Enter Watt seconds" value="10">
-        <button type="submit">Submit 10 Watt Seconds</button>
-    </form>
+    <div style="margin-left: 20px; margin-right: 20px;">
+        <div id="answer-display" style="visibility: hidden;"></div>
+        <div id="status-display" style="text-align: center;">
+            <span id="go" style="color:red; visibility: hidden;"></span><span id="finished" style="color:green; visibility: hidden;"></span>
+        </div>
+    </div>
 
-    <h2>Answer</h2>
-    <div><span id="displayed-answer-length"></span> of <span id="answer-length"></span> chars displayed</div>
-    <div id="answer-display"></div>
+    <div id="ask-form-container">
+        <div style="display: flex; justify-content: center; align-items: flex-end; gap: 24px;">
+            <form id="ask-form" style="margin: 0;">
+                <input type="text" id="question" size="100%" placeholder="Deine Frage?" autocomplete="off"><br/>
+                <button name="ask" type="submit">Frage senden und ab aufs AIrgometer!</button>
+                {% if debug %}
+                    <input type="hidden" id="watt-seconds" value="50">
+                    <button name="test" type="submit">Test</button>
+                    (<span id="displayed-answer-length">0</span> of <span id="answer-length">0</span>)
+                {% endif %}
+            </form>
+        </div>
+    </div>
 
     <script>
         const askForm = document.getElementById("ask-form");
-        const wattForm = document.getElementById("watt-form");
+        const questionInput = document.getElementById("question");
+
         const answerDisplay = document.getElementById("answer-display");
+
+        const statusDisplay = document.getElementById("status-display");
+        const goLabel = document.getElementById("go");
+        const finishedLabel = document.getElementById("finished");
+        
         const answerLength = document.getElementById("answer-length");
         const displayedAnswerLength = document.getElementById("displayed-answer-length");
-        const questionInput = document.getElementById("question");
-        const wattInput = document.getElementById("watt-seconds");
 
         function clearUI() {
             questionInput.value = '';
-            wattInput.value = '';
             answerDisplay.innerText = '';
-            answerLength.innerText = '';
-            displayedAnswerLength.innerText = '';
+            answerDisplay.style.visibility = "hidden";
+            goLabel.innerText = "";
+            goLabel.style.visibility = "hidden";
+            finishedLabel.innerText = "";
+            finishedLabel.style.visibility = "hidden";
+            if (answerLength) {
+                answerLength.innerText = '';
+            }
+            if (displayedAnswerLength) {
+                displayedAnswerLength.innerText = '';
+            }
+            document.getElementById("ask-form").reset();
         }
+
+        focusQuestionInput = () => {
+            // Set focus to the question input field
+            if (document.activeElement !== questionInput) {
+                questionInput.focus();
+            }
+        };
 
         // Check for timeout and get answer length
         setInterval(async () => {
+            focusQuestionInput();
+
+            // If the question input is empty, ignore the request
+            if (questionInput.value === "") {
+                return;
+            }
+
             const response = await fetch("/submit_watt_seconds", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
@@ -85,42 +202,72 @@
             // If the answer states that a timeout occured, clear the UI
             if (data.info === 'Timeout') {
                 clearUI();
+                const response = await fetch("/submit_watt_seconds", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ watt_seconds: 0, cleared: true })
+                });
+            } else {
+                previousAnswer = answerDisplay.innerText;
+
+                if(data.answer_length !== undefined) {
+                    if (answerLength) {
+                        answerLength.innerText = data.answer_length;
+                    }
+                    if (displayedAnswerLength) {
+                        displayedAnswerLength.innerText = data.displayed_answer_length;
+                    }
+                    answerDisplay.innerText = data.displayed_answer;
+                    if (data.displayed_answer !== previousAnswer && data.displayed_answer !== "") {
+                        statusDisplay.scrollIntoView({ behavior: "smooth" });
+                    }
+                    if (data.displayed_answer_length < data.answer_length) {
+                        answerDisplay.style.visibility = "visible";
+                        goLabel.style.visibility = "visible";
+                        goLabel.innerText = " TRETEN! TRETEN! TRETEN! (" + Math.round((data.displayed_answer_length / data.answer_length) * 100) + "%)";
+                        finishedLabel.style.visibility = "hidden";
+                        finishedLabel.innerText = "";
+                    } else if (data.displayed_answer_length = data.answer_length && data.answer_length > 0) {
+                        answerDisplay.style.visibility = "visible";
+                        goLabel.style.visibility = "hidden";
+                        goLabel.innerText = "";
+                        finishedLabel.style.visibility = "visible";
+                        finishedLabel.innerText = " GESCHAFFT!";
+                    } else {
+                        answerDisplay.style.visibility = "hidden";
+                        goLabel.style.visibility = "hidden";
+                        goLabel.innerText = "";
+                        finishedLabel.style.visibility = "hidden";
+                        finishedLabel.innerText = "";
+                    }
+                    //window.scrollTo(0, document.body.scrollHeight);
+                }
             }
-            if(data.answer_length !== undefined) {
-                answerLength.innerText = data.answer_length;
-                displayedAnswerLength.innerText = data.displayed_answer_length;
-                answerDisplay.innerText = data.displayed_answer;
-            }
+            //questionInput.scrollIntoView({ behavior: "smooth" });
         }, 1000);
 
         askForm.addEventListener("submit", async (e) => {
             e.preventDefault();
-            const question = document.getElementById("question").value;
-
-            const response = await fetch("/ask", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ question })
-            });
-
-            const data = await response.json();
-        });
-
-        wattForm.addEventListener("submit", async (e) => {
-            e.preventDefault();
-            const wattSeconds = document.getElementById("watt-seconds").value;
-
-            const response = await fetch("/submit_watt_seconds", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ watt_seconds: parseFloat(wattSeconds) })
-            });
-
-            const data = await response.json();
-            answerLength.innerText = data.answer_length;
-            displayedAnswerLength.innerText = data.displayed_answer_length;
-            if (data.displayed_answer) {
-                answerDisplay.innerText = data.displayed_answer;
+            if (e.submitter.name === "test") {
+                // If the test button is pressed, submit a fixed watt-seconds value
+                const wattSeconds = document.getElementById("watt-seconds").value;
+                if (wattSeconds) {
+                    const response = fetch("/submit_watt_seconds", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ watt_seconds: parseInt(wattSeconds) })
+                    });
+                    //const data = await response.json();
+                }
+            } else {
+                const question = document.getElementById("question").value;
+                // If the ask button is pressed, submit the question
+                const response = await fetch("/ask", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ question })
+                });
+                //const data = await response.json();
             }
         });
     </script>
